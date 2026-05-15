@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/menu_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
+import 'main.dart' show playClickSound;
 
 class MainScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -18,7 +19,12 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0; // 0 – Меню, 1 – Профиль, 2 – Настройки
+  int _currentIndex = 0;
+
+  void _onTabChange(int index) {
+    playClickSound();
+    setState(() => _currentIndex = index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,16 +45,16 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             TextButton(
-              onPressed: () => setState(() => _currentIndex = 0),
-              child: Text('Меню'),
+              onPressed: () => _onTabChange(0),
+              child: const Text('Меню'),
             ),
             TextButton(
-              onPressed: () => setState(() => _currentIndex = 1),
-              child: Text('Профиль'),
+              onPressed: () => _onTabChange(1),
+              child: const Text('Профиль'),
             ),
             TextButton(
-              onPressed: () => setState(() => _currentIndex = 2),
-              child: Text('Настройки'),
+              onPressed: () => _onTabChange(2),
+              child: const Text('Настройки'),
             ),
           ],
         ),

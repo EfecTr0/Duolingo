@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart' show setBackgroundMusicVolume, setSFXVolume, playClickSound;
 
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -15,7 +16,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  double _volume = 0.5;
+  double _musicVolume = 0.5;
+  double _sfxVolume = 0.5;
 
   @override
   Widget build(BuildContext context) {
@@ -24,31 +26,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Громкость
+          // Громкость музыки
           ListTile(
-            title: const Text('Громкость'),
+            title: const Text('Музыка'),
             trailing: SizedBox(
               width: 200,
               child: Slider(
-                value: _volume,
+                value: _musicVolume,
                 min: 0,
                 max: 1,
                 divisions: 10,
-                label: '${(_volume * 100).round()}%',
+                label: '${(_musicVolume * 100).round()}%',
                 onChanged: (value) {
-                  setState(() {
-                    _volume = value;
-                  });
+                  setState(() => _musicVolume = value);
+                  setBackgroundMusicVolume(value);
+                },
+              ),
+            ),
+          ),
+          // Громкость звуков
+          ListTile(
+            title: const Text('Звуки'),
+            trailing: SizedBox(
+              width: 200,
+              child: Slider(
+                value: _sfxVolume,
+                min: 0,
+                max: 1,
+                divisions: 10,
+                label: '${(_sfxVolume * 100).round()}%',
+                onChanged: (value) {
+                  setState(() => _sfxVolume = value);
+                  setSFXVolume(value);
                 },
               ),
             ),
           ),
           const Divider(),
-          // Тема
           SwitchListTile(
             title: const Text('Тёмная тема'),
             value: widget.isDarkMode,
-            onChanged: widget.onToggleTheme,
+            onChanged: (value) {
+              playClickSound();
+              widget.onToggleTheme(value);
+            },
           ),
         ],
       ),
