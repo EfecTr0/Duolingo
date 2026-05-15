@@ -22,11 +22,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Громкость музыки
+          SizedBox(height: 20),
+          Center(
+            child: Text('Настройки',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          ),
+          SizedBox(height: 20),
           ListTile(
             title: const Text('Музыка'),
             trailing: SizedBox(
@@ -44,7 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // Громкость звуков
           ListTile(
             title: const Text('Звуки'),
             trailing: SizedBox(

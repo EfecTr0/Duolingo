@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../data/words.dart';
+import '../data/player.dart';
 import '../main.dart' show playCorrectSound, playIncorrectSound, playFinishSound, switchBackgroundMusic;
 
 class GameScreen extends StatefulWidget {
@@ -29,6 +30,9 @@ class _GameScreenState extends State<GameScreen> {
   late DateTime _startTime;
   int _timeSpentSeconds = 0;
 
+  // Хранение попыток для истории
+  final List<WordAttempt> _attemptsHistory = [];
+
   @override
   void initState() {
     super.initState();
@@ -40,16 +44,11 @@ class _GameScreenState extends State<GameScreen> {
     final random = Random();
     int minCards, maxCards;
     switch (widget.difficulty) {
-      case 'лёгкий':
-        minCards = 5; maxCards = 6; break;
-      case 'средний':
-        minCards = 6; maxCards = 7; break;
-      case 'сложный':
-        minCards = 7; maxCards = 8; break;
-      case 'носитель':
-        minCards = 8; maxCards = 8; break;
-      default:
-        minCards = 5; maxCards = 5;
+      case 'лёгкий': minCards = 5; maxCards = 6; break;
+      case 'средний': minCards = 6; maxCards = 7; break;
+      case 'сложный': minCards = 7; maxCards = 8; break;
+      case 'носитель': minCards = 8; maxCards = 8; break;
+      default: minCards = 5; maxCards = 5;
     }
     _totalCards = minCards + random.nextInt(maxCards - minCards + 1);
 
@@ -73,24 +72,34 @@ class _GameScreenState extends State<GameScreen> {
         }
       });
       playCorrectSound();
+      _saveAttempt(userAnswer, true);
       _nextCard();
     } else {
       _attemptsLeft--;
       playIncorrectSound();
       if (_attemptsLeft > 0) {
-        setState(() {
-          _feedback = 'Неправильно. Осталось попыток: $_attemptsLeft';
-        });
+        setState(() => _feedback = 'Неправильно. Осталось попыток: $_attemptsLeft');
       } else {
         setState(() {
           _feedback = 'Правильный ответ: $correctAnswer';
           _showingCorrectAnswer = true;
         });
+        _saveAttempt(null, false);
         Future.delayed(Duration(seconds: 2), () {
           if (mounted) _nextCard();
         });
       }
     }
+  }
+
+  void _saveAttempt(String? answer, bool isCorrect) {
+    final word = _bonusRound ? _bonusWord! : _words[_currentIndex];
+    _attemptsHistory.add(WordAttempt(
+      english: word.english,
+      correctRussian: word.russian,
+      userAnswer: answer,
+      isCorrect: isCorrect,
+    ));
   }
 
   void _nextCard() {
@@ -150,8 +159,29 @@ class _GameScreenState extends State<GameScreen> {
     _showResultDialog();
   }
 
+  int _calculateExperience() {
+    int baseExp;
+    switch (widget.difficulty) {
+      case 'лёгкий': baseExp = 10; break;
+      case 'средний': baseExp = 20; break;
+      case 'сложный': baseExp = 30; break;
+      case 'носитель': baseExp = 50; break;
+      default: baseExp = 10;
+    }
+    double percent = _totalCards > 0 ? _correctCount / _totalCards : 0.0;
+    int exp = (baseExp * percent).round();
+    if (_bonusAvailable && _bonusSolved) {
+      exp += (baseExp * 0.3).round();
+    }
+    return exp;
+  }
+
+  bool get _bonusAvailable => (_correctCount == _words.length && widget.difficulty != 'носитель') ||
+                             (_correctCount == _words.length && widget.difficulty == 'носитель');
+
   void _showResultDialog() {
-    final percent = (_totalCards > 0) ? (_correctCount / _totalCards) : 0.0;
+    final int experienceEarned = _calculateExperience();
+    final double percent = _totalCards > 0 ? _correctCount / _totalCards : 0.0;
     String praise;
     if (percent >= 0.9) {
       praise = 'Потрясающе!';
@@ -175,47 +205,29 @@ class _GameScreenState extends State<GameScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                praise,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
-                ),
-              ),
+              Text(praise, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.orange)),
               SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem(
-                    icon: Icons.star,
-                    value: '${(percent * 100).round()}%',
-                    label: 'Точность',
-                    color: Colors.blue,
-                  ),
-                  _buildStatItem(
-                    icon: Icons.access_time,
-                    value: timeString,
-                    label: 'Время',
-                    color: Colors.purple,
-                  ),
-                  _buildStatItem(
-                    icon: Icons.emoji_events,
-                    value: '${(percent * 100).round()}%',
-                    label: 'Опыт',
-                    color: Colors.amber,
-                  ),
+                  _buildStatItem(icon: Icons.star, value: '${(percent * 100).round()}%', label: 'Точность', color: Colors.blue),
+                  _buildStatItem(icon: Icons.access_time, value: timeString, label: 'Время', color: Colors.purple),
+                  _buildStatItem(icon: Icons.emoji_events, value: '$experienceEarned', label: 'Опыт', color: Colors.amber),
                 ],
               ),
               SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
+                  // Возвращаем ВСЕ данные
                   Navigator.pop(context, {
                     'correct': _correctCount,
                     'total': _totalCards,
-                    'bonusAvailable': _bonusRound,
+                    'bonusAvailable': _bonusAvailable,
                     'bonusSolved': _bonusSolved,
+                    'experienceEarned': experienceEarned,
+                    'attempts': _attemptsHistory,
+                    'timeSpentSeconds': _timeSpentSeconds,
                   });
                 },
                 icon: Icon(Icons.exit_to_app),
@@ -228,20 +240,12 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildStatItem({
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
+  Widget _buildStatItem({required IconData icon, required String value, required String label, required Color color}) {
     return Column(
       children: [
         Icon(icon, color: color, size: 32),
         SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
@@ -256,11 +260,8 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     int totalProgress = _totalCards + (_bonusRound ? 1 : 0);
-    int currentProgress = _bonusRound
-        ? _totalCards + (_bonusSolved ? 1 : 0)
-        : _currentIndex;
+    int currentProgress = _bonusRound ? _totalCards + (_bonusSolved ? 1 : 0) : _currentIndex;
     if (_gameOver) currentProgress = totalProgress;
-
     double progress = totalProgress > 0 ? currentProgress / totalProgress : 1.0;
 
     return Scaffold(
@@ -279,10 +280,7 @@ class _GameScreenState extends State<GameScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (_bonusRound) ...[
-                    Text('Повышенный уровень!',
-                        style: TextStyle(fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange)),
+                    Text('Повышенный уровень!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.orange)),
                     SizedBox(height: 20),
                   ],
                   Text('Переведите слово:', style: TextStyle(fontSize: 20)),
@@ -294,21 +292,12 @@ class _GameScreenState extends State<GameScreen> {
                   SizedBox(height: 30),
                   TextField(
                     controller: _answerController,
-                    decoration: InputDecoration(
-                      hintText: 'Введите перевод',
-                      border: OutlineInputBorder(),
-                    ),
+                    decoration: InputDecoration(hintText: 'Введите перевод', border: OutlineInputBorder()),
                     enabled: !_showingCorrectAnswer && !_gameOver,
                     onSubmitted: (_) => _checkAnswer(),
                   ),
                   SizedBox(height: 10),
-                  Text(
-                    _feedback,
-                    style: TextStyle(
-                      color: _feedback.startsWith('Правильно') ? Colors.green : Colors.red,
-                      fontSize: 18,
-                    ),
-                  ),
+                  Text(_feedback, style: TextStyle(color: _feedback.startsWith('Правильно') ? Colors.green : Colors.red, fontSize: 18)),
                   SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: (_showingCorrectAnswer || _gameOver) ? null : _checkAnswer,
