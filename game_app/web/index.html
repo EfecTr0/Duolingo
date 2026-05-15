@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game App</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!-- Фоновая музыка (один элемент, источник меняется динамически) -->
+  <audio id="bgm" loop>
+    <source src="menu_music.mp3" type="audio/mpeg">
+    <source src="menu_music.ogg" type="audio/ogg">
+  </audio>
+
+  <!-- Звуковые эффекты -->
+  <audio id="click" preload="auto">
+    <source src="click.mp3" type="audio/mpeg">
+    <source src="click.ogg" type="audio/ogg">
+  </audio>
+  <audio id="correct" preload="auto">
+    <source src="correct.mp3" type="audio/mpeg">
+    <source src="correct.ogg" type="audio/ogg">
+  </audio>
+  <audio id="incorrect" preload="auto">
+    <source src="incorrect.mp3" type="audio/mpeg">
+    <source src="incorrect.ogg" type="audio/ogg">
+  </audio>
+  <audio id="finish" preload="auto">
+    <source src="finish.mp3" type="audio/mpeg">
+    <source src="finish.ogg" type="audio/ogg">
+  </audio>
+
+  <script>
+    // Текущая музыкальная тема
+    window.currentBGM = 'menu'; // menu, game_easy_medium, game_hard_native, finish
+
+    // Переключение фоновой музыки
+    window.switchBGM = function(type) {
+      var audio = document.getElementById('bgm');
+      if (!audio) return;
+      if (window.currentBGM === type) return;
+      window.currentBGM = type;
+
+      var sources = audio.getElementsByTagName('source');
+      if (sources.length >= 2) {
+        if (type === 'menu') {
+          sources[0].src = 'menu_music.mp3';
+          sources[1].src = 'menu_music.ogg';
+        } else if (type === 'game_easy_medium') {
+          sources[0].src = 'game_easy_medium.mp3';
+          sources[1].src = 'game_easy_medium.ogg';
+        } else if (type === 'game_hard_native') {
+          sources[0].src = 'game_hard_native.mp3';
+          sources[1].src = 'game_hard_native.ogg';
+        } else if (type === 'finish') {
+          sources[0].src = 'finish_music.mp3';
+          sources[1].src = 'finish_music.ogg';
+        }
+        audio.load();
+        audio.play().catch(e => console.log('BGM play error:', e));
+      }
+    };
+
+    // Громкость фоновой музыки
+    window.setBGMVolume = function(vol) {
+      var audio = document.getElementById('bgm');
+      if (audio) audio.volume = vol;
+    };
+
+    // Громкость звуковых эффектов
+    window.setSFXVolume = function(vol) {
+      var sfxIds = ['click', 'correct', 'incorrect', 'finish'];
+      for (var i = 0; i < sfxIds.length; i++) {
+        var sfx = document.getElementById(sfxIds[i]);
+        if (sfx) sfx.volume = vol;
+      }
+    };
+
+    // Звуковые эффекты
+    window.playSound = function(id) {
+      var audio = document.getElementById(id);
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(e => console.log('Sound play error:', id, e));
+      }
+    };
+  </script>
+
+  <script src="flutter_bootstrap.js"></script>
+</body>
+</html>
