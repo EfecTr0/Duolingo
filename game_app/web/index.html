@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!-- Фоновая музыка (один элемент, источник меняется динамически) -->
+  <!-- Фоновая музыка -->
   <audio id="bgm" loop>
     <source src="menu_music.mp3" type="audio/mpeg">
     <source src="menu_music.ogg" type="audio/ogg">
@@ -34,16 +34,13 @@
   </audio>
 
   <script>
-    // Текущая музыкальная тема
-    window.currentBGM = 'menu'; // menu, game_easy_medium, game_hard_native, finish
-
-    // Переключение фоновой музыки
+    // ---------- Фоновая музыка ----------
+    window.currentBGM = 'menu';
     window.switchBGM = function(type) {
       var audio = document.getElementById('bgm');
       if (!audio) return;
       if (window.currentBGM === type) return;
       window.currentBGM = type;
-
       var sources = audio.getElementsByTagName('source');
       if (sources.length >= 2) {
         if (type === 'menu') {
@@ -63,14 +60,10 @@
         audio.play().catch(e => console.log('BGM play error:', e));
       }
     };
-
-    // Громкость фоновой музыки
     window.setBGMVolume = function(vol) {
       var audio = document.getElementById('bgm');
       if (audio) audio.volume = vol;
     };
-
-    // Громкость звуковых эффектов
     window.setSFXVolume = function(vol) {
       var sfxIds = ['click', 'correct', 'incorrect', 'finish'];
       for (var i = 0; i < sfxIds.length; i++) {
@@ -78,8 +71,6 @@
         if (sfx) sfx.volume = vol;
       }
     };
-
-    // Звуковые эффекты
     window.playSound = function(id) {
       var audio = document.getElementById(id);
       if (audio) {
@@ -87,6 +78,101 @@
         audio.play().catch(e => console.log('Sound play error:', id, e));
       }
     };
+
+    // ---------- Распознавание речи ----------
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var recognition = null;
+    window.startSpeechRecognition = function(lang, callbackName) {
+      if (!SpeechRecognition) {
+        console.log('SpeechRecognition не поддерживается');
+        return;
+      }
+      if (recognition) recognition.stop();
+      recognition = new SpeechRecognition();
+      recognition.lang = lang || 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript.trim();
+        if (callbackName && window[callbackName]) {
+          window[callbackName](transcript);
+        }
+      };
+      recognition.onerror = function(event) {
+        console.log('Ошибка распознавания:', event.error);
+        recognition.stop();
+      };
+      recognition.start();
+    };
+    window.stopSpeechRecognition = function() {
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+      }
+    };
+
+    // ---------- Микрофон: устройства ----------
+    window.getMicrophoneDevices = async function(callback) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        const list = mics.map(m => ({ id: m.deviceId, label: m.label || 'Микрофон ' + m.deviceId.slice(0,8) }));
+        window[callback](JSON.stringify(list));
+      } catch (e) {
+        console.log('Ошибка получения устройств:', e);
+        window[callback](JSON.stringify([]));
+      }
+    };
+
+    // ---------- Мониторинг микрофона (живой звук) ----------
+    var micMonitorStream = null;
+    var micMonitorContext = null;
+    var micMonitorGain = null;
+
+    window.startMicMonitor = async function(deviceId, volume, bgmLowVolume, callback) {
+      try {
+        // Останавливаем предыдущий мониторинг
+        window.stopMicMonitor();
+
+        // Приглушаем фоновую музыку
+        window.setBGMVolume(bgmLowVolume || 0.1);
+
+        const constraints = deviceId ? { audio: { deviceId: { exact: deviceId } } } : { audio: true };
+        micMonitorStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        micMonitorContext = new AudioContext();
+        const source = micMonitorContext.createMediaStreamSource(micMonitorStream);
+        micMonitorGain = micMonitorContext.createGain();
+        micMonitorGain.gain.value = volume;
+        source.connect(micMonitorGain);
+        micMonitorGain.connect(micMonitorContext.destination);  // подключаем к динамикам
+
+        if (callback) window[callback](true);
+      } catch (e) {
+        console.log('Ошибка мониторинга микрофона:', e);
+        if (callback) window[callback](false);
+      }
+    };
+
+    window.stopMicMonitor = function() {
+      if (micMonitorStream) {
+        micMonitorStream.getTracks().forEach(t => t.stop());
+        micMonitorStream = null;
+      }
+      if (micMonitorContext) {
+        micMonitorContext.close();
+        micMonitorContext = null;
+      }
+      micMonitorGain = null;
+      // Возвращаем громкость музыки на прежний уровень (будет установлено из Dart)
+    };
+
+    window.setMicMonitorVolume = function(vol) {
+      if (micMonitorGain) {
+        micMonitorGain.gain.value = vol;
+      }
+    };
+
   </script>
 
   <script src="flutter_bootstrap.js"></script>
