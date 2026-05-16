@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'game_screen.dart';
+import 'match_game_screen.dart';
+import 'mixed_game_screen.dart';
 import '../data/player.dart';
 import '../main.dart' show switchBackgroundMusic, playClickSound;
 
+enum GameMode { cards, matching, mixed }
+
 class MenuScreen extends StatefulWidget {
   const MenuScreen({Key? key}) : super(key: key);
+
   @override
   State<MenuScreen> createState() => MenuScreenState();
 }
 
 class MenuScreenState extends State<MenuScreen> {
   String _selectedDifficulty = 'лёгкий';
+  GameMode _selectedMode = GameMode.cards;
 
   void refresh() => setState(() {});
 
@@ -19,8 +25,20 @@ class MenuScreenState extends State<MenuScreen> {
       case 'лёгкий': return Colors.green;
       case 'средний': return Colors.yellow;
       case 'сложный': return Colors.red;
-      case 'носитель': return const Color(0xFF800000);
+      case 'носитель': return Color(0xFF800000);
+      case 'случайная': return Colors.blue;
       default: return Colors.grey;
+    }
+  }
+
+  String _difficultyEmoji(String difficulty) {
+    switch (difficulty) {
+      case 'лёгкий': return '😊';
+      case 'средний': return '😁';
+      case 'сложный': return '🤔';
+      case 'носитель': return '😈';
+      case 'случайная': return '🎲';
+      default: return '❓';
     }
   }
 
@@ -29,12 +47,12 @@ class MenuScreenState extends State<MenuScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Выберите уровень сложности'),
+        title: Text('Выберите уровень сложности'),
         content: StatefulBuilder(
           builder: (context, setDialogState) {
             return Column(
               mainAxisSize: MainAxisSize.min,
-              children: ['лёгкий', 'средний', 'сложный', 'носитель'].map((level) {
+              children: ['лёгкий', 'средний', 'сложный', 'носитель', 'случайная'].map((level) {
                 return RadioListTile<String>(
                   title: Text(level[0].toUpperCase() + level.substring(1)),
                   value: level,
@@ -48,48 +66,100 @@ class MenuScreenState extends State<MenuScreen> {
             );
           },
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Закрыть'))],
       ),
     );
   }
 
-  void _showModeSelection() {
+  void _showModeDialog() {
     playClickSound();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Выбор режима'),
-        content: const Text('Пока доступен только режим карточек слов.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+        title: Text('Выберите режим'),
+        content: StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<GameMode>(
+                  title: Text('Карточки'),
+                  value: GameMode.cards,
+                  groupValue: _selectedMode,
+                  onChanged: (val) {
+                    setDialogState(() => _selectedMode = val!);
+                    setState(() {});
+                  },
+                ),
+                RadioListTile<GameMode>(
+                  title: Text('Сопоставление'),
+                  value: GameMode.matching,
+                  groupValue: _selectedMode,
+                  onChanged: (val) {
+                    setDialogState(() => _selectedMode = val!);
+                    setState(() {});
+                  },
+                ),
+                RadioListTile<GameMode>(
+                  title: Text('Смешанный'),
+                  value: GameMode.mixed,
+                  groupValue: _selectedMode,
+                  onChanged: (val) {
+                    setDialogState(() => _selectedMode = val!);
+                    setState(() {});
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Закрыть'))],
       ),
     );
   }
 
   Future<void> _startGame() async {
     playClickSound();
-    String musicType = (_selectedDifficulty == 'лёгкий' || _selectedDifficulty == 'средний')
+    final musicType = (_selectedDifficulty == 'лёгкий' || _selectedDifficulty == 'средний')
         ? 'game_easy_medium'
         : 'game_hard_native';
     switchBackgroundMusic(musicType);
 
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => GameScreen(difficulty: _selectedDifficulty)),
-    );
+    Widget gameScreen;
+    switch (_selectedMode) {
+      case GameMode.cards:
+        gameScreen = GameScreen(difficulty: _selectedDifficulty);
+        break;
+      case GameMode.matching:
+        gameScreen = MatchGameScreen(difficulty: _selectedDifficulty);
+        break;
+      case GameMode.mixed:
+        gameScreen = MixedGameScreen(difficulty: _selectedDifficulty);
+        break;
+    }
 
+    final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => gameScreen));
     switchBackgroundMusic('menu');
 
     if (result != null && result is Map<String, dynamic>) {
+      final String modeStr = _selectedMode == GameMode.cards ? 'cards' : (_selectedMode == GameMode.matching ? 'matching' : 'mixed');
       final gameResult = GameResult(
         difficulty: _selectedDifficulty,
         dateTime: DateTime.now(),
         timeSpentSeconds: result['timeSpentSeconds'],
         correct: result['correct'],
         total: result['total'],
-        bonusAvailable: result['bonusAvailable'],
-        bonusSolved: result['bonusSolved'],
+        bonusAvailable: result['bonusAvailable'] ?? false,
+        bonusSolved: result['bonusSolved'] ?? false,
         experienceEarned: result['experienceEarned'],
-        attempts: List<WordAttempt>.from(result['attempts']),
+        attempts: (result['attempts'] as List?)?.cast<WordAttempt>() ?? [],
+        mode: modeStr,
+        matchPairs: (result['matchPairs'] as List?)?.cast<MatchPair>(),
+        roundDetails: (result['roundDetails'] as List?)?.cast<RoundDetail>(),
+        cardRoundsSuccess: result['cardRoundsSuccess'],
+        cardRoundsFailed: result['cardRoundsFailed'],
+        matchRoundsSuccess: result['matchRoundsSuccess'],
+        matchRoundsFailed: result['matchRoundsFailed'],
       );
       PlayerData().addGameResult(gameResult);
       if (gameResult.experienceEarned > 0) {
@@ -105,8 +175,7 @@ class MenuScreenState extends State<MenuScreen> {
     final color = _difficultyColor(_selectedDifficulty);
     final avatar = player.avatarBytes != null
         ? CircleAvatar(radius: 40, backgroundImage: MemoryImage(player.avatarBytes!))
-        : CircleAvatar(radius: 40, backgroundColor: Colors.grey,
-            child: const Icon(Icons.person, size: 48, color: Colors.white));
+        : CircleAvatar(radius: 40, backgroundColor: Colors.grey, child: Icon(Icons.person, size: 48, color: Colors.white));
 
     const double playAndDifficultySize = 96.0;
     const double gap = 8.0;
@@ -133,21 +202,26 @@ class MenuScreenState extends State<MenuScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(player.nickname,
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                          Text(player.nickname, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Уровень: ${player.level}', style: const TextStyle(fontSize: 18)),
+                          Text('Уровень: ${player.level}', style: TextStyle(fontSize: 18)),
                           const SizedBox(height: 4),
                           LinearProgressIndicator(value: player.progress),
-                          Text(
-                            '${player.experienceInCurrentLevel} / ${player.experienceForNextLevel} XP',
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                          Text('${player.experienceInCurrentLevel} / ${player.experienceForNextLevel} XP',
+                              style: TextStyle(fontSize: 12)),
                         ],
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 16),
+              height: 1,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                boxShadow: [BoxShadow(color: Colors.black12, offset: Offset(0, 1), blurRadius: 2)],
               ),
             ),
             Expanded(
@@ -159,12 +233,12 @@ class MenuScreenState extends State<MenuScreen> {
                       width: modeButtonSize,
                       height: modeButtonSize,
                       child: ElevatedButton(
-                        onPressed: _showModeSelection,
+                        onPressed: _showModeDialog,
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          minimumSize: const Size(modeButtonSize, modeButtonSize),
+                          minimumSize: Size(modeButtonSize, modeButtonSize),
                         ),
-                        child: const Text('Режим', style: TextStyle(fontSize: 20)),
+                        child: Text('Режим', style: TextStyle(fontSize: 20)),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -179,7 +253,7 @@ class MenuScreenState extends State<MenuScreen> {
                             style: ElevatedButton.styleFrom(
                               minimumSize: const Size(0, playAndDifficultySize),
                             ),
-                            child: const Icon(Icons.play_arrow, size: 48),  // треугольник вправо
+                            child: const Icon(Icons.play_arrow, size: 48),
                           ),
                         ),
                         const SizedBox(width: gap),
@@ -194,11 +268,7 @@ class MenuScreenState extends State<MenuScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               minimumSize: const Size(0, playAndDifficultySize),
                             ),
-                            child: Text(
-                              _selectedDifficulty[0].toUpperCase() + _selectedDifficulty.substring(1),
-                              style: const TextStyle(fontSize: 14),
-                              textAlign: TextAlign.center,
-                            ),
+                            child: Text(_difficultyEmoji(_selectedDifficulty), style: TextStyle(fontSize: 32)),
                           ),
                         ),
                       ],

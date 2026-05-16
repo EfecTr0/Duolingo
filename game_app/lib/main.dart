@@ -9,8 +9,6 @@ void main() {
 }
 
 // --- Фоновая музыка ---
-
-/// type: 'menu', 'game_easy_medium', 'game_hard_native', 'finish'
 void switchBackgroundMusic(String type) {
   try {
     js.context.callMethod('switchBGM', [type]);
@@ -19,7 +17,6 @@ void switchBackgroundMusic(String type) {
   }
 }
 
-/// Громкость фоновой музыки (0.0 - 1.0)
 void setBackgroundMusicVolume(double volume) {
   try {
     js.context.callMethod('setBGMVolume', [volume]);
@@ -28,7 +25,6 @@ void setBackgroundMusicVolume(double volume) {
   }
 }
 
-/// Громкость звуковых эффектов
 void setSFXVolume(double volume) {
   try {
     js.context.callMethod('setSFXVolume', [volume]);
@@ -50,6 +46,56 @@ void playClickSound() => playSound('click');
 void playCorrectSound() => playSound('correct');
 void playIncorrectSound() => playSound('incorrect');
 void playFinishSound() => playSound('finish');
+
+// --- Голосовой ввод ---
+void startSpeechRecognition(String lang, String callbackName) {
+  try {
+    js.context.callMethod('startSpeechRecognition', [lang, callbackName]);
+  } catch (e) {
+    debugPrint('Ошибка старта распознавания: $e');
+  }
+}
+
+void stopSpeechRecognition() {
+  try {
+    js.context.callMethod('stopSpeechRecognition', []);
+  } catch (e) {
+    debugPrint('Ошибка остановки распознавания: $e');
+  }
+}
+
+// --- Микрофон: устройства и мониторинг ---
+void getMicrophoneDevices(String callbackName) {
+  try {
+    js.context.callMethod('getMicrophoneDevices', [callbackName]);
+  } catch (e) {
+    debugPrint('Ошибка получения устройств: $e');
+  }
+}
+
+void startMicMonitor(String deviceId, double volume, double bgmLowVolume, String callbackName) {
+  try {
+    js.context.callMethod('startMicMonitor', [deviceId, volume, bgmLowVolume, callbackName]);
+  } catch (e) {
+    debugPrint('Ошибка запуска мониторинга: $e');
+  }
+}
+
+void stopMicMonitor() {
+  try {
+    js.context.callMethod('stopMicMonitor', []);
+  } catch (e) {
+    debugPrint('Ошибка остановки мониторинга: $e');
+  }
+}
+
+void setMicMonitorVolume(double vol) {
+  try {
+    js.context.callMethod('setMicMonitorVolume', [vol]);
+  } catch (e) {
+    debugPrint('Ошибка громкости монитора: $e');
+  }
+}
 
 class MyApp extends StatefulWidget {
   @override

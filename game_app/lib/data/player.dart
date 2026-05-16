@@ -1,17 +1,35 @@
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
 
 class WordAttempt {
   final String english;
   final String correctRussian;
-  final String? userAnswer; // null, если попытки кончились и показан ответ
+  final String? userAnswer;
   final bool isCorrect;
-
   WordAttempt({
     required this.english,
     required this.correctRussian,
     this.userAnswer,
     required this.isCorrect,
+  });
+}
+
+class MatchPair {
+  final String english;
+  final String russian;
+  final bool isCorrect;
+  MatchPair({required this.english, required this.russian, required this.isCorrect});
+}
+
+class RoundDetail {
+  final String type; // 'cards' или 'matching'
+  final bool success;
+  final List<WordAttempt> cardAttempts;
+  final List<MatchPair> matchPairs;
+  RoundDetail({
+    required this.type,
+    required this.success,
+    this.cardAttempts = const [],
+    this.matchPairs = const [],
   });
 }
 
@@ -26,6 +44,14 @@ class GameResult {
   final int experienceEarned;
   final List<WordAttempt> attempts;
 
+  final String? mode; // 'cards', 'matching', 'mixed'
+  final List<MatchPair>? matchPairs;
+  final List<RoundDetail>? roundDetails;
+  final int? cardRoundsSuccess;
+  final int? cardRoundsFailed;
+  final int? matchRoundsSuccess;
+  final int? matchRoundsFailed;
+
   GameResult({
     required this.difficulty,
     required this.dateTime,
@@ -36,6 +62,13 @@ class GameResult {
     required this.bonusSolved,
     required this.experienceEarned,
     required this.attempts,
+    this.mode,
+    this.matchPairs,
+    this.roundDetails,
+    this.cardRoundsSuccess,
+    this.cardRoundsFailed,
+    this.matchRoundsSuccess,
+    this.matchRoundsFailed,
   });
 }
 
@@ -67,6 +100,6 @@ class PlayerData {
   }
 
   void addGameResult(GameResult result) {
-    history.insert(0, result); // новые сверху
+    history.insert(0, result);
   }
 }

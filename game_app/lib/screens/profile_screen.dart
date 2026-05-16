@@ -5,6 +5,8 @@ import '../data/player.dart';
 import '../main.dart' show playClickSound;
 
 class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({Key? key}) : super(key: key);
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -24,7 +26,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (result != null && result.files.isNotEmpty) {
       final file = result.files.first;
       if (file.bytes != null) {
-        setState(() => PlayerData().avatarBytes = file.bytes);
+        setState(() {
+          PlayerData().avatarBytes = file.bytes;
+        });
       }
     }
   }
@@ -43,8 +47,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case 'лёгкий': return Colors.green;
       case 'средний': return Colors.yellow;
       case 'сложный': return Colors.red;
-      case 'носитель': return const Color(0xFF800000);
+      case 'носитель': return Color(0xFF800000);
+      case 'случайная': return Colors.blue;
       default: return Colors.grey;
+    }
+  }
+
+  String _modeTitle(String? mode) {
+    switch (mode) {
+      case 'cards': return 'Карточки';
+      case 'matching': return 'Сопоставление';
+      case 'mixed': return 'Смешанный';
+      default: return 'Неизвестный режим';
     }
   }
 
@@ -53,33 +67,153 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Детали игры'),
+        title: Center(child: Text(_modeTitle(game.mode), style: TextStyle(fontWeight: FontWeight.bold))),
         content: SizedBox(
           width: double.maxFinite,
           height: 400,
-          child: ListView.builder(
-            itemCount: game.attempts.length,
-            itemBuilder: (context, index) {
-              final att = game.attempts[index];
-              return ListTile(
-                leading: Icon(
-                  att.isCorrect ? Icons.check_circle : Icons.cancel,
-                  color: att.isCorrect ? Colors.green : Colors.red,
-                ),
-                title: Text(att.english, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Правильно: ${att.correctRussian}'),
-                    if (att.userAnswer != null) Text('Ваш ответ: ${att.userAnswer}'),
-                  ],
-                ),
-              );
-            },
-          ),
+          child: _buildGameContent(game),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Закрыть'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Закрыть'))],
       ),
+    );
+  }
+
+  Widget _buildGameContent(GameResult game) {
+    if (game.mode == 'cards' || game.mode == null) {
+      // Карточки – прежний список
+      return ListView.builder(
+        itemCount: game.attempts.length,
+        itemBuilder: (context, index) {
+          final att = game.attempts[index];
+          return ListTile(
+            leading: Icon(
+              att.isCorrect ? Icons.check_circle : Icons.cancel,
+              color: att.isCorrect ? Colors.green : Colors.red,
+            ),
+            title: Text(att.english, style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Правильно: ${att.correctRussian}'),
+                if (att.userAnswer != null) Text('Ваш ответ: ${att.userAnswer}'),
+              ],
+            ),
+          );
+        },
+      );
+    } else if (game.mode == 'matching') {
+      // Сопоставление – только пробованные пары
+      final pairs = game.matchPairs ?? [];
+      if (pairs.isEmpty) return Center(child: Text('Нет данных о попытках'));
+      return ListView.builder(
+        itemCount: pairs.length,
+        itemBuilder: (context, index) {
+          final pair = pairs[index];
+          final color = pair.isCorrect ? Colors.green : Colors.red;
+          final icon = pair.isCorrect ? Icons.check_circle : Icons.cancel;
+          return Container(
+            margin: EdgeInsets.symmetric(vertical: 4),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              border: Border.all(color: color, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                SizedBox(width: 8),
+                Expanded(child: Text(pair.english, style: TextStyle(fontWeight: FontWeight.bold))),
+                Icon(Icons.arrow_forward, size: 16),
+                Expanded(child: Text(pair.russian)),
+              ],
+            ),
+          );
+        },
+      );
+    } else if (game.mode == 'mixed') {
+      // Смешанный – кружки + по раундам
+      return Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildMiniRoundStat('📇', 'Карточки', game.cardRoundsSuccess ?? 0, game.cardRoundsFailed ?? 0),
+              _buildMiniRoundStat('🔗', 'Сопоставление', game.matchRoundsSuccess ?? 0, game.matchRoundsFailed ?? 0),
+            ],
+          ),
+          SizedBox(height: 20),
+          Expanded(
+            child: ListView.builder(
+              itemCount: game.roundDetails?.length ?? 0,
+              itemBuilder: (context, index) {
+                final round = game.roundDetails![index];
+                return Card(
+                  margin: EdgeInsets.symmetric(vertical: 4),
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Раунд ${index + 1}: ${round.type == 'cards' ? 'Карточки' : 'Сопоставление'}',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        if (round.type == 'cards')
+                          ...round.cardAttempts.map((att) => ListTile(
+                                dense: true,
+                                leading: Icon(att.isCorrect ? Icons.check_circle : Icons.cancel,
+                                    color: att.isCorrect ? Colors.green : Colors.red, size: 18),
+                                title: Text(att.english),
+                                subtitle: Text('Правильно: ${att.correctRussian}'),
+                              ))
+                        else
+                          ...round.matchPairs.map((pair) => Container(
+                                padding: EdgeInsets.symmetric(vertical: 2),
+                                child: Row(
+                                  children: [
+                                    Icon(pair.isCorrect ? Icons.check_circle : Icons.cancel,
+                                        color: pair.isCorrect ? Colors.green : Colors.red, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(pair.english, style: TextStyle(fontWeight: FontWeight.bold)),
+                                    Icon(Icons.arrow_forward, size: 16),
+                                    Text(pair.russian),
+                                  ],
+                                ),
+                              )),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+    return Center(child: Text('Нет данных'));
+  }
+
+  Widget _buildMiniRoundStat(String emoji, String label, int success, int failed) {
+    return Column(
+      children: [
+        Text(emoji, style: TextStyle(fontSize: 24)),
+        SizedBox(height: 4),
+        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        SizedBox(height: 4),
+        Row(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(12)),
+              child: Text('$success', style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(width: 6),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: Colors.red[100], borderRadius: BorderRadius.circular(12)),
+              child: Text('$failed', style: TextStyle(color: Colors.red[800], fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -93,9 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final player = PlayerData();
     final brightness = Theme.of(context).brightness;
-    final statBackgroundColor = brightness == Brightness.light
-        ? Colors.grey[300]!
-        : Colors.grey[800]!;
+    final statBackgroundColor = brightness == Brightness.light ? Colors.grey[300]! : Colors.grey[800]!;
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -103,11 +235,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 20),
-            const Center(
-              child: Text('Профиль', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
+            Center(child: Text('Профиль', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
+            SizedBox(height: 20),
             Row(
               children: [
                 GestureDetector(
@@ -116,39 +246,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     radius: 35,
                     backgroundColor: Colors.grey,
                     backgroundImage: player.avatarBytes != null ? MemoryImage(player.avatarBytes!) : null,
-                    child: player.avatarBytes == null
-                        ? const Icon(Icons.camera_alt, color: Colors.white, size: 30)
-                        : null,
+                    child: player.avatarBytes == null ? Icon(Icons.camera_alt, color: Colors.white, size: 30) : null,
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: 16),
                 Expanded(
                   child: TextField(
                     controller: _nameController,
                     decoration: InputDecoration(
                       labelText: 'Имя',
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.check),
-                        onPressed: _saveNickname,
-                      ),
+                      suffixIcon: IconButton(icon: Icon(Icons.check), onPressed: _saveNickname),
                     ),
                     onSubmitted: (_) => _saveNickname(),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Row(
               children: [
-                Text('Уровень: ${player.level}', style: const TextStyle(fontSize: 18)),
-                const Spacer(),
-                Text('${player.experience} XP', style: const TextStyle(fontSize: 16)),
+                Text('Уровень: ${player.level}', style: TextStyle(fontSize: 18)),
+                Spacer(),
+                Text('${player.experience} XP', style: TextStyle(fontSize: 16)),
               ],
             ),
             LinearProgressIndicator(value: player.progress),
-            const Divider(thickness: 1, height: 32),
-            const Text('Друзья', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+            Divider(thickness: 1, height: 32),
+            Text('Друзья', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -156,7 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildFriendStat('Подписчики', player.subscribers),
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             SizedBox(
               height: 70,
               child: ListView.builder(
@@ -166,25 +291,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(
                     children: [
-                      const CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.grey,
-                        child: Icon(Icons.person, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(player.friends[index], style: const TextStyle(fontSize: 12)),
+                      CircleAvatar(radius: 24, backgroundColor: Colors.grey, child: Icon(Icons.person, color: Colors.white, size: 28)),
+                      SizedBox(height: 4),
+                      Text(player.friends[index], style: TextStyle(fontSize: 12)),
                     ],
                   ),
                 ),
               ),
             ),
-            const Divider(thickness: 1, height: 32),
-            const Text('История игр', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            Divider(thickness: 1, height: 32),
+            Text('История игр', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              physics: NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,
                 crossAxisSpacing: 6,
                 mainAxisSpacing: 6,
@@ -195,47 +316,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 final game = player.history[index];
                 final color = _difficultyColor(game.difficulty);
                 final percent = game.total > 0 ? (game.correct / game.total) : 0.0;
-                final timeStr =
-                    '${game.timeSpentSeconds ~/ 60}:${(game.timeSpentSeconds % 60).toString().padLeft(2, '0')}';
+                final timeStr = '${game.timeSpentSeconds ~/ 60}:${(game.timeSpentSeconds % 60).toString().padLeft(2, '0')}';
 
                 return GestureDetector(
                   onTap: () => _showGameDetails(game),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.6),          // более насыщенный
+                      color: color.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: color, width: 2),
+                      border: Border.all(color: color, width: 1.5),
                     ),
                     child: Column(
                       children: [
                         Expanded(
                           flex: 7,
                           child: Center(
-                            child: Stack(
-                              children: [
-                                // Текст с обводкой
-                                Text(
-                                  game.difficulty[0].toUpperCase() + game.difficulty.substring(1),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    foreground: Paint()
-                                      ..style = PaintingStyle.stroke
-                                      ..strokeWidth = 2
-                                      ..color = Colors.black54,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                Text(
-                                  game.difficulty[0].toUpperCase() + game.difficulty.substring(1),
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                            child: Text(
+                              game.difficulty[0].toUpperCase() + game.difficulty.substring(1),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(color: Colors.black38, blurRadius: 2)],
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
@@ -244,12 +348,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Container(
                             decoration: BoxDecoration(
                               color: statBackgroundColor,
-                              borderRadius: const BorderRadius.only(
+                              borderRadius: BorderRadius.only(
                                 bottomLeft: Radius.circular(6),
                                 bottomRight: Radius.circular(6),
                               ),
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
+                            padding: EdgeInsets.symmetric(vertical: 1, horizontal: 2),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
@@ -275,8 +379,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildFriendStat(String label, int count) {
     return Column(
       children: [
-        Text('$count', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(fontSize: 14)),
+        Text('$count', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(fontSize: 14)),
       ],
     );
   }
@@ -286,8 +390,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color, size: 12),
-        const SizedBox(width: 1),
-        Text(value, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+        SizedBox(width: 1),
+        Text(value, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
       ],
     );
   }

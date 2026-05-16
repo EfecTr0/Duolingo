@@ -33,76 +33,71 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          ProfileScreen(),
-          MenuScreen(key: _menuKey),
-          SettingsScreen(
-            isDarkMode: widget.isDarkMode,
-            onToggleTheme: widget.onToggleTheme,
-          ),
-        ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0.2, 0.0), end: Offset.zero).animate(animation),
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        },
+        child: _buildCurrentScreen(),
       ),
       bottomNavigationBar: Container(
-        height: 70,                               // достаточно для эмодзи и текста
+        height: 70,
         color: Theme.of(context).scaffoldBackgroundColor,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _EmojiButton(
-              emoji: '👤',
-              label: 'Профиль',
-              onPressed: () => _onTabChange(0),
-            ),
-            _EmojiButton(
-              emoji: '🎮',
-              label: 'Меню',
-              onPressed: () => _onTabChange(1),
-            ),
-            _EmojiButton(
-              emoji: '⚙️',
-              label: 'Настройки',
-              onPressed: () => _onTabChange(2),
-            ),
+            _EmojiButton(emoji: '👤', label: 'Профиль', onPressed: () => _onTabChange(0)),
+            _EmojiButton(emoji: '🎮', label: 'Меню', onPressed: () => _onTabChange(1)),
+            _EmojiButton(emoji: '⚙️', label: 'Настройки', onPressed: () => _onTabChange(2)),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildCurrentScreen() {
+    switch (_currentIndex) {
+      case 0:
+        return const ProfileScreen(key: ValueKey('profile'));
+      case 1:
+        return MenuScreen(key: ValueKey('menu'));
+      case 2:
+        return SettingsScreen(
+          key: ValueKey('settings'),
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+        );
+      default:
+        return MenuScreen();
+    }
+  }
 }
 
-// Анимированная кнопка с эмодзи
+// Кнопка с эмодзи (без изменений)
 class _EmojiButton extends StatefulWidget {
   final String emoji;
   final String label;
   final VoidCallback onPressed;
-
-  const _EmojiButton({
-    required this.emoji,
-    required this.label,
-    required this.onPressed,
-  });
+  const _EmojiButton({required this.emoji, required this.label, required this.onPressed});
 
   @override
   State<_EmojiButton> createState() => _EmojiButtonState();
 }
 
-class _EmojiButtonState extends State<_EmojiButton>
-    with SingleTickerProviderStateMixin {
+class _EmojiButtonState extends State<_EmojiButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 150),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _controller = AnimationController(duration: const Duration(milliseconds: 150), vsync: this);
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -120,12 +115,16 @@ class _EmojiButtonState extends State<_EmojiButton>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _handleTap,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
+      child: ListenableBuilder(
+        listenable: _scaleAnimation,
+        builder: (context, child) => Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(widget.emoji, style: const TextStyle(fontSize: 30)),  // чуть меньше
+            Text(widget.emoji, style: const TextStyle(fontSize: 30)),
             Text(widget.label, style: const TextStyle(fontSize: 11)),
           ],
         ),
