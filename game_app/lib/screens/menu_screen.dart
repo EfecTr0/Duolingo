@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'game_screen.dart';
 import 'match_game_screen.dart';
 import 'mixed_game_screen.dart';
+import 'matching_cards_game.dart';
 import '../data/player.dart';
 import '../main.dart' show switchBackgroundMusic, playClickSound;
 
-enum GameMode { cards, matching, mixed }
+enum GameMode { cards, matching, mixed, matchingCards }
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({Key? key}) : super(key: key);
@@ -109,6 +110,16 @@ class MenuScreenState extends State<MenuScreen> {
                     setState(() {});
                   },
                 ),
+                // Nouveau mode en russe
+                RadioListTile<GameMode>(
+                  title: Text('Пары слов'),
+                  value: GameMode.matchingCards,
+                  groupValue: _selectedMode,
+                  onChanged: (val) {
+                    setDialogState(() => _selectedMode = val!);
+                    setState(() {});
+                  },
+                ),
               ],
             );
           },
@@ -136,13 +147,18 @@ class MenuScreenState extends State<MenuScreen> {
       case GameMode.mixed:
         gameScreen = MixedGameScreen(difficulty: _selectedDifficulty);
         break;
+      case GameMode.matchingCards:
+        gameScreen = MatchingCardsGameScreen(difficulty: _selectedDifficulty);
+        break;
     }
 
     final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => gameScreen));
     switchBackgroundMusic('menu');
 
     if (result != null && result is Map<String, dynamic>) {
-      final String modeStr = _selectedMode == GameMode.cards ? 'cards' : (_selectedMode == GameMode.matching ? 'matching' : 'mixed');
+      final String modeStr = _selectedMode == GameMode.cards ? 'cards' : 
+                              (_selectedMode == GameMode.matching ? 'matching' : 
+                              (_selectedMode == GameMode.mixed ? 'mixed' : 'matchingCards'));
       final gameResult = GameResult(
         difficulty: _selectedDifficulty,
         dateTime: DateTime.now(),
