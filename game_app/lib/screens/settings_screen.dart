@@ -1,23 +1,18 @@
 import 'dart:convert';
 import 'dart:js' as js;
 import 'package:flutter/material.dart';
-import '../main.dart' show
-    setBackgroundMusicVolume,
-    setSFXVolume,
-    playClickSound,
-    getMicrophoneDevices,
-    startMicMonitor,
-    stopMicMonitor,
-    setMicMonitorVolume;
+import '../api_service.dart';
+import '../main.dart' show setBackgroundMusicVolume, setSFXVolume, playClickSound,
+    getMicrophoneDevices, startMicMonitor, stopMicMonitor, setMicMonitorVolume, developerMode;
 
 class SettingsScreen extends StatefulWidget {
-  final bool isDarkMode;
   final ValueChanged<bool> onToggleTheme;
+  final VoidCallback? onLogout;
 
   const SettingsScreen({
     Key? key,
-    required this.isDarkMode,
     required this.onToggleTheme,
+    this.onLogout,
   }) : super(key: key);
 
   @override
@@ -28,12 +23,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _musicVolume = 0.5;
   double _sfxVolume = 0.5;
 
-  // Микрофон
   double _micVolume = 1.0;
   List<MicDevice> _micDevices = [];
   String? _selectedMicId;
   bool _isMonitoring = false;
   String _monitorButtonLabel = 'Проверить звук';
+
+  bool _developerMode = developerMode;
 
   @override
   void initState() {
@@ -98,20 +94,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '🔈';
   }
 
+  void _logout() async {
+    await ApiService.deleteToken();
+    widget.onLogout?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final themeEmoji = widget.isDarkMode ? '🌕' : '☀️';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeEmoji = isDark ? '🌕' : '☀️';
 
     return Scaffold(
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SizedBox(height: 20),
-          Center(
-            child: Text('Настройки', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-          ),
+          Center(child: Text('Настройки', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
           SizedBox(height: 20),
-          // Музыка
           ListTile(
             leading: Text(_volumeEmoji(_musicVolume), style: TextStyle(fontSize: 28)),
             title: const Text('Музыка'),
@@ -119,9 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 200,
               child: Slider(
                 value: _musicVolume,
-                min: 0,
-                max: 1,
-                divisions: 10,
+                min: 0, max: 1, divisions: 10,
                 label: '${(_musicVolume * 100).round()}%',
                 onChanged: (value) {
                   setState(() => _musicVolume = value);
@@ -130,7 +127,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // Звуки
           ListTile(
             leading: Text(_volumeEmoji(_sfxVolume), style: TextStyle(fontSize: 28)),
             title: const Text('Звуки'),
@@ -138,9 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 200,
               child: Slider(
                 value: _sfxVolume,
-                min: 0,
-                max: 1,
-                divisions: 10,
+                min: 0, max: 1, divisions: 10,
                 label: '${(_sfxVolume * 100).round()}%',
                 onChanged: (value) {
                   setState(() => _sfxVolume = value);
@@ -150,7 +144,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const Divider(),
-          // Микрофон
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Row(
@@ -185,9 +178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 200,
               child: Slider(
                 value: _micVolume,
-                min: 0,
-                max: 2,
-                divisions: 10,
+                min: 0, max: 2, divisions: 10,
                 label: '${(_micVolume * 100).round()}%',
                 onChanged: (value) {
                   setState(() => _micVolume = value);
@@ -204,15 +195,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const Divider(),
-          // Тема
           SwitchListTile(
             secondary: Text(themeEmoji, style: TextStyle(fontSize: 28)),
             title: const Text('Тёмная тема'),
-            value: widget.isDarkMode,
+            value: isDark,
             onChanged: (value) {
               playClickSound();
               widget.onToggleTheme(value);
             },
+          ),
+          const Divider(),
+          SwitchListTile(
+            secondary: const Text('🛠️', style: TextStyle(fontSize: 28)),
+            title: const Text('Режим разработчика'),
+            value: _developerMode,
+            onChanged: (value) {
+              playClickSound();
+              setState(() => _developerMode = value);
+              developerMode = value;
+            },
+          ),
+          const Divider(),
+          Center(
+            child: TextButton.icon(
+              onPressed: _logout,
+              icon: const Text('❌', style: TextStyle(fontSize: 20)),
+              label: const Text('Выйти из аккаунта', style: TextStyle(color: Colors.red, fontSize: 18)),
+            ),
           ),
         ],
       ),

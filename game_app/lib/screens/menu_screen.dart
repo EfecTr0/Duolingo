@@ -1,12 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'game_screen.dart';
 import 'match_game_screen.dart';
 import 'mixed_game_screen.dart';
-import 'matching_cards_game.dart';
+import '../api_service.dart';
 import '../data/player.dart';
-import '../main.dart' show switchBackgroundMusic, playClickSound;
+import '../main.dart' show switchBackgroundMusic, playClickSound, developerMode;
 
-enum GameMode { cards, matching, mixed, matchingCards }
+enum GameMode { cards, matching, mixed }
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({Key? key}) : super(key: key);
@@ -18,6 +19,10 @@ class MenuScreen extends StatefulWidget {
 class MenuScreenState extends State<MenuScreen> {
   String _selectedDifficulty = 'лёгкий';
   GameMode _selectedMode = GameMode.cards;
+
+  // Параметры диалога разработчика
+  double _devPercent = 1.0;
+  bool _devBonus = false;
 
   void refresh() => setState(() {});
 
@@ -84,8 +89,7 @@ class MenuScreenState extends State<MenuScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 RadioListTile<GameMode>(
-                  title: Text('Карточки'),
-                  value: GameMode.cards,
+                  title: Text('Карточки'), value: GameMode.cards,
                   groupValue: _selectedMode,
                   onChanged: (val) {
                     setDialogState(() => _selectedMode = val!);
@@ -93,8 +97,7 @@ class MenuScreenState extends State<MenuScreen> {
                   },
                 ),
                 RadioListTile<GameMode>(
-                  title: Text('Сопоставление'),
-                  value: GameMode.matching,
+                  title: Text('Сопоставление'), value: GameMode.matching,
                   groupValue: _selectedMode,
                   onChanged: (val) {
                     setDialogState(() => _selectedMode = val!);
@@ -102,18 +105,7 @@ class MenuScreenState extends State<MenuScreen> {
                   },
                 ),
                 RadioListTile<GameMode>(
-                  title: Text('Смешанный'),
-                  value: GameMode.mixed,
-                  groupValue: _selectedMode,
-                  onChanged: (val) {
-                    setDialogState(() => _selectedMode = val!);
-                    setState(() {});
-                  },
-                ),
-                // Nouveau mode en russe
-                RadioListTile<GameMode>(
-                  title: Text('Пары слов'),
-                  value: GameMode.matchingCards,
+                  title: Text('Смешанный'), value: GameMode.mixed,
                   groupValue: _selectedMode,
                   onChanged: (val) {
                     setDialogState(() => _selectedMode = val!);
@@ -129,12 +121,99 @@ class MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  /// Показывает диалог настройки результата для режима разработчика.
+  Future<Map<String, dynamic>?> _showDeveloperDialog() async {
+    double localPercent = _devPercent;
+    bool localBonus = _devBonus;
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text('Настройка результата (dev)'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Процент правильных ответов: ${(localPercent * 100).round()}%'),
+                Slider(
+                  value: localPercent,
+                  min: 0,
+                  max: 1,
+                  divisions: 20,
+                  onChanged: (v) {
+                    setDialogState(() => localPercent = v);
+                  },
+                ),
+                SwitchListTile(
+                  title: Text('Бонусный вопрос решён'),
+                  value: localBonus,
+                  onChanged: (v) {
+                    setDialogState(() => localBonus = v);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Отмена'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx, {
+                    'percent': localPercent,
+                    'bonus': localBonus,
+                  });
+                },
+                child: Text('Применить'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _startGame() async {
     playClickSound();
     final musicType = (_selectedDifficulty == 'лёгкий' || _selectedDifficulty == 'средний')
         ? 'game_easy_medium'
         : 'game_hard_native';
     switchBackgroundMusic(musicType);
+
+    String modeStr;
+    switch (_selectedMode) {
+      case GameMode.cards: modeStr = 'cards'; break;
+      case GameMode.matching: modeStr = 'matching'; break;
+      case GameMode.mixed: modeStr = 'mixed'; break;
+    }
+
+    if (developerMode) {
+      final settings = await _showDeveloperDialog();
+      if (settings == null) {
+        switchBackgroundMusic('menu');
+        return;
+      }
+      final double percent = settings['percent'] as double;
+      final bool bonus = settings['bonus'] as bool;
+      _devPercent = percent;
+      _devBonus = bonus;
+
+      // Генерируем результат, как в обычной игре (берём 10 вопросов)
+      final int total = 10;
+      final int correct = (total * percent).round();
+      final int exp = _calculateExperience(_selectedDifficulty, total, correct, bonus);
+      _processGameResult({
+        'correct': correct,
+        'total': total,
+        'bonusAvailable': bonus,
+        'bonusSolved': bonus,
+        'experienceEarned': exp,
+        'timeSpentSeconds': 0,
+        'attempts': [],
+      }, modeStr);
+      return;
+    }
 
     Widget gameScreen;
     switch (_selectedMode) {
@@ -147,42 +226,64 @@ class MenuScreenState extends State<MenuScreen> {
       case GameMode.mixed:
         gameScreen = MixedGameScreen(difficulty: _selectedDifficulty);
         break;
-      case GameMode.matchingCards:
-        gameScreen = MatchingCardsGameScreen(difficulty: _selectedDifficulty);
-        break;
     }
 
     final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => gameScreen));
     switchBackgroundMusic('menu');
 
     if (result != null && result is Map<String, dynamic>) {
-      final String modeStr = _selectedMode == GameMode.cards ? 'cards' : 
-                              (_selectedMode == GameMode.matching ? 'matching' : 
-                              (_selectedMode == GameMode.mixed ? 'mixed' : 'matchingCards'));
-      final gameResult = GameResult(
-        difficulty: _selectedDifficulty,
-        dateTime: DateTime.now(),
-        timeSpentSeconds: result['timeSpentSeconds'],
-        correct: result['correct'],
-        total: result['total'],
-        bonusAvailable: result['bonusAvailable'] ?? false,
-        bonusSolved: result['bonusSolved'] ?? false,
-        experienceEarned: result['experienceEarned'],
-        attempts: (result['attempts'] as List?)?.cast<WordAttempt>() ?? [],
-        mode: modeStr,
-        matchPairs: (result['matchPairs'] as List?)?.cast<MatchPair>(),
-        roundDetails: (result['roundDetails'] as List?)?.cast<RoundDetail>(),
-        cardRoundsSuccess: result['cardRoundsSuccess'],
-        cardRoundsFailed: result['cardRoundsFailed'],
-        matchRoundsSuccess: result['matchRoundsSuccess'],
-        matchRoundsFailed: result['matchRoundsFailed'],
-      );
-      PlayerData().addGameResult(gameResult);
-      if (gameResult.experienceEarned > 0) {
-        PlayerData().addExperience(gameResult.experienceEarned);
-      }
-      setState(() {});
+      _processGameResult(result, modeStr);
     }
+  }
+
+  void _processGameResult(Map<String, dynamic> result, String modeStr) async {
+    final int correct = result['correct'] ?? 0;
+    final int total = result['total'] ?? 0;
+    final int experienceEarned = result['experienceEarned'] ?? 0;
+
+    if (experienceEarned > 0) {
+      await PlayerData().addExperience(experienceEarned);
+    }
+
+    PlayerData().onGameCompleted(modeStr, _selectedDifficulty, correct, total);
+
+    try {
+      await ApiService.addGameHistory({
+        'difficulty': _selectedDifficulty,
+        'mode': modeStr,
+        'date_time': DateTime.now().toIso8601String(),
+        'time_spent_seconds': result['timeSpentSeconds'] ?? 0,
+        'correct': correct,
+        'total': total,
+        'bonus_available': result['bonusAvailable'] ?? false,
+        'bonus_solved': result['bonusSolved'] ?? false,
+        'experience_earned': experienceEarned,
+        'attempts_json': jsonEncode(result['attempts'] ?? []),
+        'match_pairs_json': result['matchPairs'] != null ? jsonEncode(result['matchPairs']) : null,
+        'round_details_json': result['roundDetails'] != null ? jsonEncode(result['roundDetails']) : null,
+      });
+    } catch (e) {
+      debugPrint('Failed to send game history: $e');
+    }
+
+    setState(() {});
+  }
+
+  int _calculateExperience(String difficulty, int total, int correct, bool bonusSolved) {
+    int baseExp;
+    switch (difficulty) {
+      case 'лёгкий': baseExp = 10; break;
+      case 'средний': baseExp = 20; break;
+      case 'сложный': baseExp = 30; break;
+      case 'носитель': baseExp = 50; break;
+      default: baseExp = 15; break;
+    }
+    double percent = total > 0 ? correct / total : 0.0;
+    int exp = (baseExp * percent * total).round();
+    if (bonusSolved) {
+      exp += (baseExp * 0.3).round();
+    }
+    return exp;
   }
 
   @override

@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'screens/menu_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/friends_screen.dart';
+import 'login_screen.dart';
 import 'main.dart' show playClickSound;
 
 class MainScreen extends StatefulWidget {
-  final bool isDarkMode;
   final ValueChanged<bool> onToggleTheme;
 
   const MainScreen({
     Key? key,
-    required this.isDarkMode,
     required this.onToggleTheme,
   }) : super(key: key);
 
@@ -19,15 +19,11 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0; // 0 - Профиль, 1 - Меню, 2 - Настройки
-  final GlobalKey<MenuScreenState> _menuKey = GlobalKey();
+  int _currentIndex = 1; // 0 - Профиль, 1 - Друзья, 2 - Меню, 3 - Настройки
 
   void _onTabChange(int index) {
     playClickSound();
     setState(() => _currentIndex = index);
-    if (index == 1) {
-      _menuKey.currentState?.refresh();
-    }
   }
 
   @override
@@ -37,13 +33,35 @@ class _MainScreenState extends State<MainScreen> {
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeInOut,
         switchOutCurve: Curves.easeInOut,
-        transitionBuilder: (Widget child, Animation<double> animation) {
+        transitionBuilder: (child, animation) {
           return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0.2, 0.0), end: Offset.zero).animate(animation),
+            position: Tween<Offset>(begin: const Offset(0.2, 0), end: Offset.zero).animate(animation),
             child: FadeTransition(opacity: animation, child: child),
           );
         },
-        child: _buildCurrentScreen(),
+        child: IndexedStack(
+          key: ValueKey(_currentIndex),
+          index: _currentIndex,
+          children: [
+            ProfileScreen(),
+            FriendsScreen(),
+            MenuScreen(),
+            SettingsScreen(
+              onToggleTheme: widget.onToggleTheme,
+              onLogout: () {
+                widget.onToggleTheme(false);
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => LoginScreen(
+                      onToggleTheme: widget.onToggleTheme,
+                      onResetTheme: () => widget.onToggleTheme(false),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: Container(
         height: 70,
@@ -52,33 +70,16 @@ class _MainScreenState extends State<MainScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _EmojiButton(emoji: '👤', label: 'Профиль', onPressed: () => _onTabChange(0)),
-            _EmojiButton(emoji: '🎮', label: 'Меню', onPressed: () => _onTabChange(1)),
-            _EmojiButton(emoji: '⚙️', label: 'Настройки', onPressed: () => _onTabChange(2)),
+            _EmojiButton(emoji: '👥', label: 'Друзья', onPressed: () => _onTabChange(1)),
+            _EmojiButton(emoji: '🎮', label: 'Меню', onPressed: () => _onTabChange(2)),
+            _EmojiButton(emoji: '⚙️', label: 'Настройки', onPressed: () => _onTabChange(3)),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildCurrentScreen() {
-    switch (_currentIndex) {
-      case 0:
-        return const ProfileScreen(key: ValueKey('profile'));
-      case 1:
-        return MenuScreen(key: ValueKey('menu'));
-      case 2:
-        return SettingsScreen(
-          key: ValueKey('settings'),
-          isDarkMode: widget.isDarkMode,
-          onToggleTheme: widget.onToggleTheme,
-        );
-      default:
-        return MenuScreen();
-    }
-  }
 }
 
-// Кнопка с эмодзи (без изменений)
 class _EmojiButton extends StatefulWidget {
   final String emoji;
   final String label;
@@ -115,12 +116,8 @@ class _EmojiButtonState extends State<_EmojiButton> with SingleTickerProviderSta
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _handleTap,
-      child: ListenableBuilder(
-        listenable: _scaleAnimation,
-        builder: (context, child) => Transform.scale(
-          scale: _scaleAnimation.value,
-          child: child,
-        ),
+      child: ScaleTransition(
+        scale: _scaleAnimation,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

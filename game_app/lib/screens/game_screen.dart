@@ -33,7 +33,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late DateTime _startTime;
   int _timeSpentSeconds = 0;
 
-  final List<WordAttempt> _attemptsHistory = [];
   bool _isListening = false;
 
   late AnimationController _scaleController;
@@ -58,7 +57,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pop(context, {
           'correct': 0, 'total': 0, 'bonusAvailable': false, 'bonusSolved': false,
-          'experienceEarned': 0, 'attempts': [], 'timeSpentSeconds': 0
+          'experienceEarned': 0, 'timeSpentSeconds': 0
         });
       });
       return;
@@ -121,7 +120,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         else _correctCount++;
       });
       playCorrectSound();
-      _saveAttempt(userAnswer, true);
       _showParticles(isCorrect: true);
       _animateToNextWord();
     } else {
@@ -135,19 +133,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           _feedback = 'Правильный ответ: $correctAnswer';
           _showingCorrectAnswer = true;
         });
-        _saveAttempt(null, false);
         _showParticles(isCorrect: false);
         Future.delayed(Duration(seconds: 2), () {
           if (mounted) _nextCard();
         });
       }
     }
-  }
-
-  void _saveAttempt(String? answer, bool isCorrect) {
-    final word = _bonusRound ? _bonusWord! : _words[_currentIndex];
-    _attemptsHistory.add(WordAttempt(
-      english: word.english, correctRussian: word.russian, userAnswer: answer, isCorrect: isCorrect));
   }
 
   void _animateToNextWord() {
@@ -301,7 +292,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         'bonusAvailable': _bonusAvailable,
                         'bonusSolved': _bonusSolved,
                         'experienceEarned': experienceEarned,
-                        'attempts': _attemptsHistory,
                         'timeSpentSeconds': _timeSpentSeconds,
                       });
                     },
@@ -439,9 +429,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 }
-
-// (Остальные виджеты: AnimatedStatRow, ParticleEffect, _Particle)
-// ...
 
 // =================== ВИДЖЕТ АНИМИРОВАННОЙ СТАТИСТИКИ ===================
 class AnimatedStatRow extends StatefulWidget {
@@ -601,7 +588,7 @@ class _ParticleEffectState extends State<ParticleEffect> with SingleTickerProvid
   void _generateParticles() {
     final w = widget.screenSize.width;
     final h = widget.screenSize.height;
-    for (int i = 0; i < 60; i++) {
+    for (int i = 0; i < 30; i++) {
       final isLeft = _random.nextBool();
       final size = 20.0 + _random.nextDouble() * 20;
       final offset = Offset(
